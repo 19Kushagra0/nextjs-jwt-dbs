@@ -1,39 +1,33 @@
-// importing cookie from headers
-import { cookies } from "next/headers";
+import clientPromise from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 
-export async function GET() {
-  const token = (await cookies()).get("token")?.value;
-
-  //   if the value is not found send undefined
-  // cookies in nextjs 16 is async
-
-  if (!token) {
-    return Response.json(
-      { message: "user not authenticated" },
-      { status: 401 },
-    );
-  }
-
-  // without use of ?.value we have to get value later again in the if condition
-  //   token =  token.value
-
-  //   jwt when expired wull not send null or undefined so use try catch
+export async function GET(request) {
   try {
-    // const verified = jwt.verify(token, "secretOrPrivateKey");
-    // importing auth.js
-    const verified = verifyToken(token);
+    const token = request.cookies.get("token")?.value;
 
-    return Response.json({
-      message: "user is authenticated",
-      // 🔹 no role check for now
-      // identity is enough
-      user: verified,
-    });
-  } catch (error) {
-    return Response.json(
-      { message: "jwt expired or invalid" },
-      { status: 401 },
+    if (!token) {
+      return Response.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    // decode token
+    const decoded = verifyToken(token);
+
+    const client = await clientPromise;
+    const db = client.db("auth-dashboard");
+    const users = db.collection("users");
+
+    // find user by id from token
+    const user = await users.findOne(
+      { _id: new (await import("mongodb")).ObjectId(decoded.id) },
+      { projection: { password: 0 } }, // never send password
     );
+
+    if (!user) {
+      return Response.json({ error: "User not found" }, { status: 404 });
+    }
+
+    return Response.json({ user });
+  } catch (error) {
+    return Response.json({ error: "Invalid token" }, { status: 401 });
   }
 }

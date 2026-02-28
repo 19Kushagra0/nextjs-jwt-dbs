@@ -1,28 +1,42 @@
-import { findUser, addUser } from "@/lib/users";
+import clientPromise from "@/lib/db";
+export async function POST(request) {
+  try {
+    // all logic here
 
-export async function POST(req) {
-  const { username, password } = await req.json();
+    const { username, password } = await request.json();
 
-  // basic validation
-  if (!username || !password) {
-    return new Response(
-      JSON.stringify({ message: "Username and password required" }),
-      { status: 400 },
-    );
-  }
+    // basic validation
+    if (!username || !password) {
+      return Response.json(
+        { error: "Username and password required" },
+        { status: 400 },
+      );
+    }
 
-  // check if user already exists
-  const existingUser = findUser(username);
-  if (existingUser) {
-    return new Response(JSON.stringify({ message: "User already exists" }), {
-      status: 409,
+    // check if user already exists
+    const client = await clientPromise;
+    const db = client.db("auth-dashboard");
+    const users = db.collection("users");
+
+    const existingUser = await users.findOne({ username });
+
+    // const existingUser = findUser(username);
+
+    if (existingUser) {
+      return Response.json({ error: "User already exists" }, { status: 409 });
+    }
+    // save user
+    // addUser(username, password);
+
+    await users.insertOne({
+      username,
+      password,
+      createdAt: new Date(),
     });
+    return new Response(JSON.stringify({ message: "Signup successful" }), {
+      status: 201,
+    });
+  } catch (error) {
+    return Response.json({ error: "Something went wrong" }, { status: 500 });
   }
-
-  // save user
-  addUser(username, password);
-
-  return new Response(JSON.stringify({ message: "Signup successful" }), {
-    status: 201,
-  });
 }
