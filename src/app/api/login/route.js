@@ -1,54 +1,91 @@
-import clientPromise from "@/lib/db";
-import { signToken } from "@/lib/auth";
 import { serialize } from "cookie";
+import { signToken } from "@/lib/auth";
+import clientPromise from "@/lib/db";
 
 export async function POST(request) {
   try {
     const { username, password } = await request.json();
 
-    if (!username || !password) {
-      return Response.json(
-        { error: "Username and password required" },
-        { status: 400 },
-      );
-    }
-
     const client = await clientPromise;
     const db = client.db("auth-dashboard");
     const users = db.collection("users");
 
-    // find user in database
+    // is username and password provided
+    if (!username || !password) {
+      return Response.json(
+        { message: "Username and password required" },
+        { status: 400 },
+      );
+    }
+
+    // check if user exists
     const user = await users.findOne({ username });
 
+    // const user = users.find((user) => {
+    //   return user.email === username && user.password === password;
+    // });
+
+    // check if user exists
     if (!user) {
-      return Response.json({ error: "Invalid credentials" }, { status: 401 });
+      return Response.json(
+        { message: "Please provide correct username and password" },
+        {
+          status: 401,
+        },
+      );
     }
 
-    // check password (plain for now)
+    // check if password is correct
     if (user.password !== password) {
-      return Response.json({ error: "Invalid credentials" }, { status: 401 });
+      return Response.json(
+        { message: "Please provide correct username and password" },
+        {
+          status: 401,
+        },
+      );
     }
 
-    // create token
+    //   jwt.sign(payload, secretOrPrivateKey, [options])
+    // const token = jwt.sign({ username }, "secretOrPrivateKey", {
+    //   expiresIn: "7d",
+    // });
+
+    // importing auth.js
+    // 🔹 keep token payload minimal (no roles for now)
     const token = signToken({
       id: user._id.toString(),
       username: user.username,
     });
 
-    // set cookie
-    const cookie = serialize("token", token, {
+    //   serialize(name, value, options) || (cookie template)
+    const serialized = serialize("token", token, {
       httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: 60 * 60 * 24 * 7,
       path: "/",
-      maxAge: 60 * 60 * 24, // 1 day
     });
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: {
-        "Set-Cookie": cookie,
-      },
-    });
+    // there is also next js way to to do it
+    // in this way you dont have to return cookie in respose
+    // but this can not be used in pyton, nodejs etc
+    // const cookieStore = cookies();
+    // await cookieStore.set("token", token, {
+    //     httpOnly: true,
+    //     secure: true,
+    //     sameSite: "strict",
+    //     maxAge: 60 * 60 * 24 * 7,
+    //     path: "/",
+    //   });
+
+    // console.log(serialized);
+
+    return Response.json(
+      { message: "Login successful", success: true },
+      // auto create cookie
+      { headers: { "Set-Cookie": serialized } },
+    );
   } catch (error) {
-    return Response.json({ error: "Something went wrong" }, { status: 500 });
+    return Response.json({ message: "Login failed" }, { status: 500 });
   }
 }
