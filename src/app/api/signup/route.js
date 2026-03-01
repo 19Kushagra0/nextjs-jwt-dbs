@@ -1,5 +1,5 @@
-import { findUser, addUser } from "@/lib/users";
 import clientPromise from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 export async function POST(req) {
   // if db server failed after db.js is connected
@@ -24,9 +24,12 @@ export async function POST(req) {
     if (existingUser) {
       return Response.json({ message: "User already exists" }, { status: 409 });
     }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     await users.insertOne({
       username,
-      password,
+      password: hashedPassword,
       createdAt: new Date(),
     });
     // save user
