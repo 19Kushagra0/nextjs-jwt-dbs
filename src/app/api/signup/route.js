@@ -1,28 +1,39 @@
 import { findUser, addUser } from "@/lib/users";
+import clientPromise from "@/lib/db";
 
 export async function POST(req) {
-  const { username, password } = await req.json();
+  // if db server failed after db.js is connected
+  try {
+    const { username, password } = await req.json();
 
-  // basic validation
-  if (!username || !password) {
-    return new Response(
-      JSON.stringify({ message: "Username and password required" }),
-      { status: 400 },
-    );
-  }
+    const client = await clientPromise;
+    const db = client.db("auth-dashboard");
+    const users = db.collection("users");
 
-  // check if user already exists
-  const existingUser = findUser(username);
-  if (existingUser) {
-    return new Response(JSON.stringify({ message: "User already exists" }), {
-      status: 409,
+    // basic validation
+    if (!username || !password) {
+      return Response.json(
+        { message: "Username and password required" },
+        { status: 400 },
+      );
+    }
+
+    const existingUser = await users.findOne({ username });
+    // check if user already exists
+    // const existingUser = findUser(username);  with users.js
+    if (existingUser) {
+      return Response.json({ message: "User already exists" }, { status: 409 });
+    }
+    await users.insertOne({
+      username,
+      password,
+      createdAt: new Date(),
     });
+    // save user
+    // addUser(username, password);  with users.js
+
+    return Response.json({ message: "Signup successful" }, { status: 201 });
+  } catch (error) {
+    return Response.json({ message: "Signup failed" }, { status: 500 });
   }
-
-  // save user
-  addUser(username, password);
-
-  return new Response(JSON.stringify({ message: "Signup successful" }), {
-    status: 201,
-  });
 }
